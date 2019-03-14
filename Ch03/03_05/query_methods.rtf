@@ -1,0 +1,83 @@
+{\rtf1\ansi\ansicpg1252\cocoartf1561\cocoasubrtf200
+{\fonttbl\f0\fnil\fcharset0 Menlo-Regular;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;\red0\green0\blue0;}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c0;\csgray\c0\c0;}
+\margl1440\margr1440\vieww18200\viewh13640\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf2 \cb3 	   // This method retrieves the names of the existing lists\
+        fun requestListNames(context: Context) \{\
+\
+            // Reset the listNames array\
+            listNames = ArrayList()\
+\
+            // Get a DynamoDBMapper object\
+            val dbMapper = AWSProvider.getInstance().getDynamoDBMapper()\
+\
+            // Get the userId\
+            val userId = AWSProvider.getInstance().getIdentityManager().cachedUserID\
+\
+            // Create a template ListNamesDO object to use as the basis for a query\
+            val template = ListNamesDO()\
+            template.userId = userId\
+\
+            // Create a query to retrieve all the list names for this userId\
+            val query = DynamoDBQueryExpression<ListNamesDO>().withHashKeyValues(template)\
+\
+            // Perform the query\
+            val result = dbMapper.query(ListNamesDO::class.java, query)\
+\
+            // Iterate over the results and collect the list names and list ids into an array\
+            val iterator = result.iterator()\
+            while (iterator.hasNext()) \{\
+                val list = iterator.next()\
+                listNames.add(list)\
+            \}\
+\
+            // Send a broadcast to let any interested objects know that the list names have been retrieved\
+            val intent = Intent("listNamesDownloaded")\
+            LocalBroadcastManager.getInstance(context).sendBroadcast(intent)\
+        \}\
+\
+        // This method retrieves the list items for the given list\
+        fun requestListItems(list: ListNamesDO, context: Context) \{\
+\
+            // Get a DynamoDBMapper object\
+            val dbMapper = AWSProvider.getInstance().getDynamoDBMapper()\
+\
+            // Get the userId\
+            val userId = AWSProvider.getInstance().getIdentityManager().cachedUserID\
+\
+            // Create a template ListItemsDO object to use as the basis for a query\
+            val template = ListItemsDO()\
+            template.userId = userId\
+\
+            // Create a range key condition to find list items with the matching listNameId\
+            val rangeKeyCondition = Condition()\
+            rangeKeyCondition.withComparisonOperator(ComparisonOperator.EQ)\
+                    .withAttributeValueList(AttributeValue().withS(list.nameId))\
+\
+            // Create a query to retrieve all the list items for this listNameId\
+            val query = DynamoDBQueryExpression<ListItemsDO>()\
+                    .withHashKeyValues(template)\
+                    .withConsistentRead(false)\
+                    .withRangeKeyCondition("listNameId", rangeKeyCondition)\
+\
+            // Perform the query\
+            val result = dbMapper.query(ListItemsDO::class.java, query)\
+\
+            // Iterate over the results and collect the list names into an array\
+            var listItems = ArrayList<ListItemsDO>()\
+            val iterator = result.iterator()\
+            while (iterator.hasNext()) \{\
+                val listItem = iterator.next()\
+                listItems.add(listItem)\
+            \}\
+\
+            // Add the listItems array to the lists map\
+            lists[list.nameId] = listItems\
+\
+            // Send a broadcast to let any interested objects know that the list items have been retrieved\
+            val intent = Intent("listItemsDownloaded")\
+            LocalBroadcastManager.getInstance(context).sendBroadcast(intent)\
+        \}}

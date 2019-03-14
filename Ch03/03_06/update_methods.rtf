@@ -1,0 +1,132 @@
+{\rtf1\ansi\ansicpg1252\cocoartf1561\cocoasubrtf200
+{\fonttbl\f0\fnil\fcharset0 Menlo-Regular;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;\red0\green0\blue0;}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c0;\csgray\c0\c0;}
+\margl1440\margr1440\vieww19300\viewh10800\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf2 \cb3 	   // This method creates a new list\
+        fun createList(listName: String, context: Context) \{\
+\
+            // Get an AmazonDynamoDBClient object\
+            val dbClient = AWSProvider.getInstance().getAmazonDynamoDBClient()\
+\
+            // Get the userId\
+            val userId = AWSProvider.getInstance().getIdentityManager().cachedUserID\
+\
+            // Create a new ListNamesDO object\
+            val newList = ListNamesDO()\
+            newList.userId = userId\
+            newList.nameId = UUID.randomUUID().toString()\
+            newList.name = listName\
+\
+            // Add the new list locally\
+            listNames.add(newList)\
+            lists[newList.nameId] = ArrayList()\
+\
+            // Create a request to add this list\
+            val putItemRequest = PutItemRequest(newList.tableName, newList.toMap())\
+            val putItemResult = dbClient.putItem(putItemRequest)\
+\
+            // Send a broadcast to let any interested objects know that the list has been added\
+            val intent = Intent("listAdded")\
+            intent.putExtra("listNameId", newList.nameId)\
+            LocalBroadcastManager.getInstance(context).sendBroadcast(intent)\
+        \}\
+\
+        // This method deletes a list and all of its items\
+        fun deleteList(list: ListNamesDO, context: Context) \{\
+\
+            // Get an AmazonDynamoDBClient object\
+            val dbClient = AWSProvider.getInstance().getAmazonDynamoDBClient()\
+\
+            // Create a map with the primary key and the sort key for the list_names table\
+            val map = HashMap<String, AttributeValue>()\
+            map["userId"] = AttributeValue(list.userId)\
+            map["nameId"] = AttributeValue(list.nameId)\
+\
+            // Create a request to delete this list\
+            val deleteItemRequest = DeleteItemRequest(ListNamesDO().tableName, map)\
+            val deleteItemResult = dbClient.deleteItem(deleteItemRequest)\
+\
+            // Delete all the items for this list\
+            if (lists[list.nameId] != null) \{\
+                for (thisListItem in lists[list.nameId]!!) \{\
+\
+                    // Create a map with the primary key and the sort key for the list_items table\
+                    val map = HashMap<String, AttributeValue>()\
+                    map["userId"] = AttributeValue(thisListItem.userId)\
+                    map["itemId"] = AttributeValue(thisListItem.itemId)\
+\
+                    // Create a request to delete this list\
+                    val thisDeleteItemRequest = DeleteItemRequest(ListItemsDO().tableName, map)\
+                    dbClient.deleteItem(thisDeleteItemRequest)\
+                \}\
+            \}\
+\
+            // Delete the list items locally\
+            lists.remove(list.nameId)\
+\
+            // Delete the list locally\
+            listNames.remove(list)\
+\
+            // Send a broadcast to let any interested objects know that the list has been deleted\
+            val intent = Intent("listRemoved")\
+            LocalBroadcastManager.getInstance(context).sendBroadcast(intent)\
+        \}\
+\
+        // This method creates a new list item\
+        fun createListItem(listItem: String, list: ListNamesDO, context: Context) \{\
+\
+            // Get an AmazonDynamoDBClient object\
+            val dbClient = AWSProvider.getInstance().getAmazonDynamoDBClient()\
+\
+            // Get the userId\
+            val userId = AWSProvider.getInstance().getIdentityManager().cachedUserID\
+\
+            // Create a new ListItemsDO object\
+            val newItem = ListItemsDO()\
+            newItem.userId = userId\
+            newItem.listNameId = list.nameId\
+            newItem.itemId = UUID.randomUUID().toString()\
+            newItem.item = listItem\
+\
+            // Add the new list item locally\
+            var listItems = lists[list.nameId] as ArrayList<ListItemsDO>\
+            listItems.add(newItem)\
+            lists[list.nameId] = listItems\
+\
+            // Create a request to add this list item\
+            val putItemRequest = PutItemRequest(newItem.tableName, newItem.toMap())\
+            val putItemResult = dbClient.putItem(putItemRequest)\
+\
+            // Send a broadcast to let any interested objects know that the list item has been added\
+            val intent = Intent("listItemAdded")\
+            LocalBroadcastManager.getInstance(context).sendBroadcast(intent)\
+        \}\
+\
+        // This method deletes a given list item\
+        fun deleteListItem(listItem: ListItemsDO, context: Context) \{\
+\
+            // Get an AmazonDynamoDBClient object\
+            val dbClient = AWSProvider.getInstance().getAmazonDynamoDBClient()\
+\
+            // Create a map with the primary key and the sort key for the list_items table\
+            val map = HashMap<String, AttributeValue>()\
+            map["userId"] = AttributeValue(listItem.userId)\
+            map["itemId"] = AttributeValue(listItem.itemId)\
+\
+            // Delete the list item locally\
+            val list = ListManager.getListForId(listItem.listNameId)\
+            var listItems = lists[list.nameId] as ArrayList<ListItemsDO>\
+            listItems.remove(listItem)\
+            lists[list.nameId] = listItems\
+\
+            // Create a request to delete this list\
+            val deleteItemRequest = DeleteItemRequest(ListItemsDO().tableName, map)\
+            val deleteItemResult = dbClient.deleteItem(deleteItemRequest)\
+\
+            // Send a broadcast to let any interested objects know that the list item has been deleted\
+            val intent = Intent("listItemRemoved")\
+            LocalBroadcastManager.getInstance(context).sendBroadcast(intent)\
+        \}}
